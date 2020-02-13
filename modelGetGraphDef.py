@@ -39,6 +39,7 @@ Y = np.load('/home/localadmin/Documents/TEST_SET_S2S_Y.npy')
 
 # You can set the logger severity higher to suppress messages (or lower to display more messages).
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
+elapsed_time_TRT=0
 
 class ModelData(object):
     MODEL_FILE = "model.uff"
@@ -64,13 +65,21 @@ def build_engine(model_file):
 def do_inference(context, bindings, inputs, outputs, stream, batch_size=1):
     # Transfer input data to the GPU.
     [cuda.memcpy_htod_async(inp.device, inp.host, stream) for inp in inputs]
+
+    start_TRT = datetime.datetime.now()
     # Run inference.
-    context.execute_async(batch_size=batch_size, bindings=bindings, stream_handle=stream.handle)
+    for i in range(10000):
+    	context.execute_async(batch_size=batch_size, bindings=bindings, stream_handle=stream.handle)
+    end_TRT = datetime.datetime.now()
+    elapsed_time_TRT=(end_TRT-start_TRT).total_seconds()
+    print("Elapsed time with TensorRT: ",elapsed_time_TRT)
+
     # Transfer predictions back from the GPU.
     [cuda.memcpy_dtoh_async(out.host, out.device, stream) for out in outputs]
     # Synchronize the stream
     stream.synchronize()
     # Return only the host outputs.
+    print(outputs)
     return [out.host for out in outputs]
 
 
@@ -91,7 +100,7 @@ def main():
 
 
 	start = datetime.datetime.now()
-	for i in range(10):
+	for i in range(10000):
 	    PRED = sess.run('output/BiasAdd:0',feed_dict={'inputs:0':X})#,'hidden_state:0':HS})
 	end = datetime.datetime.now()
 
@@ -100,9 +109,6 @@ def main():
 	#STD = np.std((PRED[:,-1,:] - Y[:,-1,:])**2)
 	RMSE = np.sqrt(np.mean((PRED[:,:] - Y[:,-1,:])**2))
 	STD = np.std((PRED[:,:] - Y[:,-1,:])**2)
-
-	print("Elapsed time without TensorRT: ")
-	print(elapsed_time)
 
 	print(Y[:,-1,:])
 
@@ -143,6 +149,26 @@ def main():
 	#G_LOGGER = trt.infer.ConsoleLogger(trt.infer.LogSeverity.ERROR)
 	model_file='model.uff'
 	builder=build_engine(model_file)
+
+	with builder as engine:
+		# Build an engine, allocate buffers and create a stream.
+		inputs, outputs, bindings, stream = common.allocate_buffers(engine)
+		with engine.create_execution_context() as context:
+		    #case_num = load_normalized_test_case(data_paths, pagelocked_buffer=inputs[0].host)
+
+		    
+		    # The common.do_inference function will return a list of outputs - we only have one in this case.
+		    [output] =do_inference(context, bindings=bindings, inputs=inputs, outputs=outputs, stream=stream)
+		    pred = np.argmax(output)
+		    #print("Test Case: " + str(case_num))
+		    print("Prediction: " + str(pred))
+	print(output)
 	
+	print("Elapsed time without TensorRT: ",elapsed_time)
+
+#MLP --> 10 000 inferences
+#    -without TensorRT : 118 s 
+#    -with TensorRT : 0.35 s
+
 if __name__ == '__main__':
     main()
