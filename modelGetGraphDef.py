@@ -30,12 +30,16 @@ import sys
 import common
 #from common import * 
 #----------------------------------------------------
+MAX_BATCH_SIZE=20000
+batch_size=2000
+inference_Loop=10000
+
 
 
 ROOT = '/home/localadmin/Documents/MLP/model_ckpt'
 PATH = ROOT+'/Best_1S'
-X = np.load('/home/localadmin/Documents/TEST_SET_S2S_X.npy')
-Y = np.load('/home/localadmin/Documents/TEST_SET_S2S_Y.npy')
+X = np.load('/home/localadmin/Documents/TEST_SET_S2S_X.npy')[:2000]
+Y = np.load('/home/localadmin/Documents/TEST_SET_S2S_Y.npy')[:2000]
 
 # You can set the logger severity higher to suppress messages (or lower to display more messages).
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
@@ -53,7 +57,8 @@ def GiB(val):
 def build_engine(model_file):
     # For more information on TRT basics, refer to the introductory samples.
     with trt.Builder(TRT_LOGGER) as builder, builder.create_network() as network, trt.UffParser() as parser:
-        builder.max_workspace_size =GiB(1)
+        builder.max_workspace_size =GiB(4)
+        builder.max_batch_size=MAX_BATCH_SIZE
         # Parse the Uff Network
         parser.register_input(ModelData.INPUT_NAME, ModelData.INPUT_SHAPE)
         parser.register_output(ModelData.OUTPUT_NAME)
@@ -62,13 +67,13 @@ def build_engine(model_file):
         return builder.build_cuda_engine(network)
 
         
-def do_inference(context, bindings, inputs, outputs, stream, batch_size=1):
+def do_inference(context, bindings, inputs, outputs, stream, batch_size=batch_size):
     # Transfer input data to the GPU.
     [cuda.memcpy_htod_async(inp.device, inp.host, stream) for inp in inputs]
 
     start_TRT = datetime.datetime.now()
     # Run inference.
-    for i in range(10000):
+    for i in range(inference_Loop):
     	context.execute_async(batch_size=batch_size, bindings=bindings, stream_handle=stream.handle)
     end_TRT = datetime.datetime.now()
     elapsed_time_TRT=(end_TRT-start_TRT).total_seconds()
@@ -79,7 +84,6 @@ def do_inference(context, bindings, inputs, outputs, stream, batch_size=1):
     # Synchronize the stream
     stream.synchronize()
     # Return only the host outputs.
-    print(outputs)
     return [out.host for out in outputs]
 
 
@@ -100,17 +104,18 @@ def main():
 
 
 	start = datetime.datetime.now()
-	for i in range(10000):
+	for i in range(inference_Loop):
 	    PRED = sess.run('output/BiasAdd:0',feed_dict={'inputs:0':X})#,'hidden_state:0':HS})
 	end = datetime.datetime.now()
 
 	elapsed_time = (end-start).total_seconds()
+	print(PRED.shape)
 	#RMSE = np.sqrt(np.mean((PRED[:,-1,:] - Y[:,-1,:])**2))
 	#STD = np.std((PRED[:,-1,:] - Y[:,-1,:])**2)
 	RMSE = np.sqrt(np.mean((PRED[:,:] - Y[:,-1,:])**2))
 	STD = np.std((PRED[:,:] - Y[:,-1,:])**2)
 
-	print(Y[:,-1,:])
+	#print(Y[:,-1,:])
 
 	FileWriter("__tb", sess.graph)
 	#--------------------------------------------------#
@@ -138,7 +143,7 @@ def main():
 	# Finally we serialize and dump the output graph to the filesystem
 	with tf.gfile.GFile(output_graph, "wb") as f:
 	    f.write(output_graph_def.SerializeToString())
-	print("%d ops in the final graph." % len(output_graph_def.node))
+	#print("%d ops in the final graph." % len(output_graph_def.node))
 
 	#----------------------------------#
 	#Conversion TF graph def as UFF #
@@ -146,11 +151,15 @@ def main():
 	uff_model = uff.from_tensorflow_frozen_model(ROOT+'/frozen_model.pb',['output/BiasAdd'],output_filename = 'model.uff')
 
 
-	#G_LOGGER = trt.infer.ConsoleLogger(trt.infer.LogSeverity.ERROR)
+	#----------------------------------#
+	#Build the engine and run inference#
+	#---------------------------------#
 	model_file='model.uff'
+	maxBatchSize=2000
 	builder=build_engine(model_file)
-
+	
 	with builder as engine:
+		
 		# Build an engine, allocate buffers and create a stream.
 		inputs, outputs, bindings, stream = common.allocate_buffers(engine)
 		with engine.create_execution_context() as context:
@@ -159,12 +168,14 @@ def main():
 		    
 		    # The common.do_inference function will return a list of outputs - we only have one in this case.
 		    [output] =do_inference(context, bindings=bindings, inputs=inputs, outputs=outputs, stream=stream)
-		    pred = np.argmax(output)
+		    pred = output#np.argmax(output)
+		    print(output.shape)
 		    #print("Test Case: " + str(case_num))
 		    print("Prediction: " + str(pred))
-	print(output)
+	
 	
 	print("Elapsed time without TensorRT: ",elapsed_time)
+	#print("Max batch time",engine.max_batch_size)
 
 #MLP --> 10 000 inferences
 #    -without TensorRT : 118 s 
