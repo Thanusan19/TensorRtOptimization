@@ -1,0 +1,6 @@
+network parameters: 4163
+network forward time: 0:00:00.002081 batch_size (5000)
+network backward time: 0:00:00.000839 batch_size (64)
+best single-step-Accuracy reach for: 0.038472008
+best multi-steps-Accuracy reach for: 0.2288987799163212
+least Worse Accuracy reach for: 0.2821806677307773
