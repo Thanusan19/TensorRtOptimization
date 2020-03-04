@@ -2,3 +2,6 @@ numpy
 Pillow
 pycuda
 common
+cython
+
+
