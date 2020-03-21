@@ -172,10 +172,14 @@ def main():
 		    print(output.shape)
 		    #print("Test Case: " + str(case_num))
 		    print("Prediction: " + str(pred))
-	
-	
+
+	print("input shape: ",X.shape[:])
+	print("input shape: ",X.shape[1:])
+
+
+	print("output shape: ",output.shape)
 	print("Elapsed time without TensorRT: ",elapsed_time)
-	#print("Max batch time",engine.max_batch_size)
+        #print("Max batch time",engine.max_batch_size)
 
 #MLP --> 10 000 inferences
 #    -without TensorRT : 118 s 
