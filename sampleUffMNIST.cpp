@@ -241,7 +241,7 @@ bool SampleUffMNIST::processInput(
 
     float* hostInputBuffer = static_cast<float*>(buffers.getHostBuffer(inputTensorName));
 
-    for (int i = 0; i < inputH * inputW*2000 ; i++)
+    for (int i = 0; i < inputH * inputW * mParams.batchSize ; i++)
     {
         hostInputBuffer[i] =Xfloatv[i]; //fileData[i];
     }
@@ -307,7 +307,7 @@ bool SampleUffMNIST::infer()
 
     bool outputCorrect = true;
     float total = 0;
-    int inferenceLoop=100;
+    int inferenceLoop=1000;
 
     // Try to infer each digit 0-9
     for (int index = 0; index < inferenceLoop; index++)
@@ -338,7 +338,7 @@ bool SampleUffMNIST::infer()
         //outputCorrect &= verifyOutput(buffers, mParams.outputTensorNames[0], digit);*/
     }
 
-    total /= inferenceLoop;
+    //total /= inferenceLoop;
 
     gLogInfo << "Average time is " << total << " ms." << std::endl;
 
@@ -374,7 +374,7 @@ samplesCommon::UffSampleParams initializeSampleParams(const samplesCommon::Args&
 
     params.uffFileName = locateFile("model.uff", params.dataDirs);
     params.inputTensorNames.push_back("inputs");
-    params.batchSize = 1000;
+    params.batchSize = 2000;
     params.outputTensorNames.push_back("output/BiasAdd");
     params.dlaCore = args.useDLACore;
     params.int8 = args.runInInt8;
