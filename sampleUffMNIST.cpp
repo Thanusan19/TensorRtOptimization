@@ -89,7 +89,7 @@ private:
     //!        in a managed buffer
     //!
     bool processInput(
-        const samplesCommon::BufferManager& buffers, const std::string& inputTensorName) const;
+        const samplesCommon::BufferManager& buffers, const std::string& inputTensorName, int index) const;
 
     //!
     //! \brief Verifies that the output is correct and prints it
@@ -137,7 +137,7 @@ bool SampleUffMNIST::build()
     }
     constructNetwork(parser, network);
     builder->setMaxBatchSize(mParams.batchSize);
-    config->setMaxWorkspaceSize(16_MiB);
+    config->setMaxWorkspaceSize(1000_MiB);
     config->setFlag(BuilderFlag::kGPU_FALLBACK);
     if (mParams.fp16)
     {
@@ -195,40 +195,40 @@ void SampleUffMNIST::constructNetwork(
 //! \brief Reads the input data, preprocesses, and stores the result in a managed buffer
 //!
 bool SampleUffMNIST::processInput(
-    const samplesCommon::BufferManager& buffers, const std::string& inputTensorName) const
+    const samplesCommon::BufferManager& buffers, const std::string& inputTensorName, int index) const
 {
     const int inputH = 12; //mInputDims.d[1];
-    const int inputW = 5*10000;//mInputDims.d[2];
+    const int inputW = 5;//mInputDims.d[2];
 
-    std::vector<float> fileData(inputH * inputW);
-    fileData={-3.74841139e-01, -1.20535629e+00, -3.60918836e-01,
-         1.71073943e+00,  9.41292065e-01,
-       -4.85638685e-01, -5.66108537e-01, -3.51833194e-01,
-         1.71073943e+00,  9.41292065e-01,
-       -5.77922007e-01,  5.69351548e-04, -2.89559081e-01,
-         1.71073943e+00,  9.41292065e-01,
-       -6.53862752e-01,  5.00181191e-01, -1.67735843e-01,
-         1.71073943e+00,  9.41292065e-01,
-       -7.15742714e-01,  9.29600884e-01,  1.09809295e-02,
-         1.71073943e+00,  9.41292065e-01,
-       -7.65784762e-01,  1.28726371e+00,  2.37892275e-01,
-         1.71073943e+00,  9.41292065e-01,
-       -8.06033604e-01,  1.57478222e+00,  5.00374912e-01,
-         1.71073943e+00,  9.41292065e-01,
-       -8.38287257e-01,  1.79681914e+00,  7.84048473e-01,
-         1.71073943e+00,  9.41292065e-01,
-       -8.64071018e-01,  1.96038230e+00,  1.07512464e+00,
-         1.71073943e+00,  9.41292065e-01,
-       -8.84643447e-01,  2.07382441e+00,  1.36181080e+00,
-         1.71073943e+00,  9.41292065e-01,
-       -9.01022816e-01,  2.14585400e+00,  1.63496703e+00,
-         1.71073943e+00,  9.41292065e-01,
-       -9.14023692e-01,  2.18478214e+00,  1.88817498e+00,
-         1.71073943e+00,  9.41292065e-01};
-
-    for(int i=0;i<10000;i++){
-	fileData.push_back(i);
+    //Import and convert input data from X.txt to a vector Xfloat//
+    ifstream f("/home/localadmin/NNOptimization/TensorRT-7.0.0.11/samples/sampleUffMNIST/X.txt");
+    string Xstr;
+    std::vector<float> Xfloatv;
+    while(getline(f,Xstr,',')){
+	float Xfloat= std::stof(Xstr);
+	Xfloatv.push_back(Xfloat);
     }
+    f.close();
+
+    /*float fileData[inputH * inputW*2000];
+    //Create Input vector of shape =(2000,12,5)
+    float X[2000][12][5];
+    for(int i=0;i<2000;i++){
+	for(int j=0;j<12;j++){
+		for(int k=0;k<5;k++){
+			X[i][j][k]=Xfloatv[i*12*5 + 5*j + k];
+			fileData.push_back(X[i][j][k]);
+		}
+	}
+    }*/
+
+    /*for(int j=0;j<12;j++){
+	for(int k=0;k<5;k++){
+		fileData.push_back(X[index][j][k]);
+        }
+    }*/
+
+
     //readPGMFile(locateFile(std::to_string(inputFileIdx) + ".pgm", mParams.dataDirs), fileData.data(), inputH, inputW);
 
     // Print ASCII representation of digit
@@ -241,9 +241,9 @@ bool SampleUffMNIST::processInput(
 
     float* hostInputBuffer = static_cast<float*>(buffers.getHostBuffer(inputTensorName));
 
-    for (int i = 0; i < inputH * inputW; i++)
+    for (int i = 0; i < inputH * inputW*2000 ; i++)
     {
-        hostInputBuffer[i] = fileData[i];
+        hostInputBuffer[i] =Xfloatv[i]; //fileData[i];
     }
     return true;
 }
@@ -307,11 +307,12 @@ bool SampleUffMNIST::infer()
 
     bool outputCorrect = true;
     float total = 0;
+    int inferenceLoop=100;
 
     // Try to infer each digit 0-9
-    for (int digit = 0; digit < 1; digit++)
+    for (int index = 0; index < inferenceLoop; index++)
     {
-        if (!processInput(buffers, mParams.inputTensorNames[0]))
+        if (!processInput(buffers, mParams.inputTensorNames[0],index))
         {
             return false;
         }
@@ -337,7 +338,7 @@ bool SampleUffMNIST::infer()
         //outputCorrect &= verifyOutput(buffers, mParams.outputTensorNames[0], digit);*/
     }
 
-    //total /= kDIGITS;
+    total /= inferenceLoop;
 
     gLogInfo << "Average time is " << total << " ms." << std::endl;
 
@@ -373,7 +374,7 @@ samplesCommon::UffSampleParams initializeSampleParams(const samplesCommon::Args&
 
     params.uffFileName = locateFile("model.uff", params.dataDirs);
     params.inputTensorNames.push_back("inputs");
-    params.batchSize = 10000;
+    params.batchSize = 1000;
     params.outputTensorNames.push_back("output/BiasAdd");
     params.dlaCore = args.useDLACore;
     params.int8 = args.runInInt8;
