@@ -73,6 +73,11 @@ public:
     bool infer();
 
     //!
+    //! Calculate the aearage time on 100 * 1000 inferences (MLP model engine)
+    //!
+    bool infer2();
+
+    //!
     //! \brief Used to clean up any state created in the sample class
     //!
     bool teardown();
@@ -89,13 +94,14 @@ private:
     //!        in a managed buffer
     //!
     bool processInput(
-        const samplesCommon::BufferManager& buffers, const std::string& inputTensorName, int index) const;
+        const samplesCommon::BufferManager& buffers, const std::string& inputTensorName) const;
 
     //!
     //! \brief Verifies that the output is correct and prints it
     //!
     bool verifyOutput(
         const samplesCommon::BufferManager& buffers, const std::string& outputTensorName, int groundTruthDigit) const;
+
 
     std::shared_ptr<nvinfer1::ICudaEngine> mEngine{nullptr}; //!< The TensorRT engine used to run the network
 
@@ -195,7 +201,7 @@ void SampleUffMNIST::constructNetwork(
 //! \brief Reads the input data, preprocesses, and stores the result in a managed buffer
 //!
 bool SampleUffMNIST::processInput(
-    const samplesCommon::BufferManager& buffers, const std::string& inputTensorName, int index) const
+    const samplesCommon::BufferManager& buffers, const std::string& inputTensorName) const
 {
     const int inputH = 12; //mInputDims.d[1];
     const int inputW = 5;//mInputDims.d[2];
@@ -210,35 +216,6 @@ bool SampleUffMNIST::processInput(
     }
     f.close();
 
-    /*float fileData[inputH * inputW*2000];
-    //Create Input vector of shape =(2000,12,5)
-    float X[2000][12][5];
-    for(int i=0;i<2000;i++){
-	for(int j=0;j<12;j++){
-		for(int k=0;k<5;k++){
-			X[i][j][k]=Xfloatv[i*12*5 + 5*j + k];
-			fileData.push_back(X[i][j][k]);
-		}
-	}
-    }*/
-
-    /*for(int j=0;j<12;j++){
-	for(int k=0;k<5;k++){
-		fileData.push_back(X[index][j][k]);
-        }
-    }*/
-
-
-    //readPGMFile(locateFile(std::to_string(inputFileIdx) + ".pgm", mParams.dataDirs), fileData.data(), inputH, inputW);
-
-    // Print ASCII representation of digit
-    /*gLogInfo << "Input:\n";
-    for (int i = 0; i < inputH * inputW; i++)
-    {
-        gLogInfo << (" .:-=+*#%@"[fileData[i] / 26]) << (((i + 1) % inputW) ? "" : "\n");
-    }
-    gLogInfo << std::endl;*/
-
     float* hostInputBuffer = static_cast<float*>(buffers.getHostBuffer(inputTensorName));
 
     for (int i = 0; i < inputH * inputW * mParams.batchSize ; i++)
@@ -247,6 +224,9 @@ bool SampleUffMNIST::processInput(
     }
     return true;
 }
+
+
+
 
 //!
 //! \brief Verifies that the inference output is correct
@@ -307,12 +287,12 @@ bool SampleUffMNIST::infer()
 
     bool outputCorrect = true;
     float total = 0;
-    int inferenceLoop=1000;
+    int inferenceLoop=10000;
 
-    // Try to infer each digit 0-9
+    // Try to infer 
     for (int index = 0; index < inferenceLoop; index++)
     {
-        if (!processInput(buffers, mParams.inputTensorNames[0],index))
+        if (!processInput(buffers, mParams.inputTensorNames[0]))
         {
             return false;
         }
@@ -335,7 +315,7 @@ bool SampleUffMNIST::infer()
         buffers.copyOutputToHost();
 
         // Check and print the output of the inference
-        //outputCorrect &= verifyOutput(buffers, mParams.outputTensorNames[0], digit);*/
+        //outputCorrect &= verifyOutput(buffers, mParams.outputTensorNames[0], digit);
     }
 
     //total /= inferenceLoop;
@@ -345,6 +325,87 @@ bool SampleUffMNIST::infer()
     //return outputCorrect;
     return true;
 }
+
+
+
+//!
+//! \brief Runs the TensorRT inference engine for MLP and calculate average time on 100 * 1000 inferences
+//!
+//! \details This function is the main execution function of the sample.
+//!  It allocates the buffer, sets inputs, executes the engine, and verifies the output.
+//!
+bool SampleUffMNIST::infer2()
+{
+    // Create RAII buffer manager object
+    samplesCommon::BufferManager buffers(mEngine, mParams.batchSize);
+
+    auto context = SampleUniquePtr<nvinfer1::IExecutionContext>(mEngine->createExecutionContext());
+    if (!context)
+    {
+        return false;
+    }
+
+    bool outputCorrect = true;
+    float total = 0;
+    int inferenceLoop1=1000;
+    int inferenceLoop2=100;
+    int timeList[inferenceLoop2];
+
+    // Try to infer 
+    for (int i = 0; i < inferenceLoop2; i++)
+    {
+	gLogInfo<< "Lot of 1000 inferences Index = "<<i<<std::endl;
+	total=0;
+
+        if (!processInput(buffers, mParams.inputTensorNames[0]))
+        {
+            	return false;
+        }
+        // Copy data from host input buffers to device input buffers
+        buffers.copyInputToDevice();
+
+	for (int j = 0; j < inferenceLoop1; j++){
+                const auto t_start = std::chrono::high_resolution_clock::now();
+        	// Execute the inference work
+        	if (!context->execute(mParams.batchSize, buffers.getDeviceBindings().data()))
+        	{
+            		return false;
+        	}
+
+        	const auto t_end = std::chrono::high_resolution_clock::now();
+        	const float ms = std::chrono::duration<float, std::milli>(t_end - t_start).count();
+        	total += ms;
+	}
+
+       	// Copy data from device output buffers to host output buffers
+       	buffers.copyOutputToHost();
+	timeList[i]=total;
+    }
+
+    //Calculate the average
+    float sum=0.0;
+    float aver=0.0;
+    for(int i=0;i<inferenceLoop2;i++){
+	sum+=timeList[i];
+    }
+    aver=sum/inferenceLoop2;
+
+    //Calcuate statistical variance
+    float V=0;
+    for(int i=0;i<inferenceLoop2;i++){
+	V = V +  (timeList[i] - aver)*(timeList[i] - aver);
+    }
+    V=V/inferenceLoop2;
+
+
+    gLogInfo << "Average time is: " << aver << " ms." << std::endl;
+    gLogInfo << "Variance is: " << V <<std::endl; 
+
+    return true;
+}
+
+
+
 
 //!
 //! \brief Used to clean up any state created in the sample class
@@ -374,7 +435,7 @@ samplesCommon::UffSampleParams initializeSampleParams(const samplesCommon::Args&
 
     params.uffFileName = locateFile("model.uff", params.dataDirs);
     params.inputTensorNames.push_back("inputs");
-    params.batchSize = 2000;
+    params.batchSize = 80000;
     params.outputTensorNames.push_back("output/BiasAdd");
     params.dlaCore = args.useDLACore;
     params.int8 = args.runInInt8;
@@ -432,7 +493,7 @@ int main(int argc, char** argv)
     {
         return gLogger.reportFail(sampleTest);
     }
-    if (!sample.infer())
+    if (!sample.infer2())
     {
         return gLogger.reportFail(sampleTest);
     }
