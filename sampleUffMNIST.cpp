@@ -287,7 +287,7 @@ bool SampleUffMNIST::infer()
 
     bool outputCorrect = true;
     float total = 0;
-    int inferenceLoop=10000;
+    int inferenceLoop=1000;
 
     // Try to infer 
     for (int index = 0; index < inferenceLoop; index++)
@@ -435,7 +435,7 @@ samplesCommon::UffSampleParams initializeSampleParams(const samplesCommon::Args&
 
     params.uffFileName = locateFile("model.uff", params.dataDirs);
     params.inputTensorNames.push_back("inputs");
-    params.batchSize = 80000;
+    params.batchSize = 2000;
     params.outputTensorNames.push_back("output/BiasAdd");
     params.dlaCore = args.useDLACore;
     params.int8 = args.runInInt8;

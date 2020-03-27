@@ -22,8 +22,8 @@ import sys
 import common 
 #----------------------------------------------------
 MAX_BATCH_SIZE=100000
-batch_size=1000
-inference_Loop=10000
+batch_size=100000
+inference_Loop=1000
 
 
 
@@ -153,17 +153,29 @@ def main():
 		inputs, outputs, bindings, stream = common.allocate_buffers(engine)
 		with engine.create_execution_context() as context:
 		    #case_num = load_normalized_test_case(data_paths, pagelocked_buffer=inputs[0].host)
+		    #case_num = load_normalized_test_case(data_paths, pagelocked_buffer=inputs[0].host)
+		    l=[0]*MAX_BATCH_SIZE*X.shape[1]*X.shape[2]
+		    for k in range(X.shape[0]):
+		       for i in range(X.shape[1]):
+		          for j in range(X.shape[2]):
+		             l[k*X.shape[1]*X.shape[2] + j*X.shape[1] + i]=X[k][i][j]
+		             #l[k]=X[0][0][0]
+		    np.copyto(inputs[0].host,l)
 
-		    
 		    # The common.do_inference function will return a list of outputs - we only have one in this case.
 		    [output] =do_inference(context, bindings=bindings, inputs=inputs, outputs=outputs, stream=stream)
 		    pred = output#np.argmax(output)
 		    print(output.shape)
 		    #print("Test Case: " + str(case_num))
+		    print("Engine Input shape : ",len(inputs[0].host))
+		    print()
+		    print("Engine Input : ",inputs)
 		    print("Prediction: " + str(pred))
 
+
+
 	print("input shape: ",X.shape[:])
-	print("input shape: ",X.shape[1:])
+	print("input : ",X)
 
 
 	print("output shape: ",output.shape)
