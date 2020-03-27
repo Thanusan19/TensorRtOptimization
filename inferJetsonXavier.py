@@ -33,8 +33,8 @@ inference_Loop=100000
 
 ROOT = '/home/kingfisher/TensorRtOptimization/rsc/MLP/model_ckpt'
 PATH = ROOT+'/Best_1S'
-X = np.load('/home/kingfisher/TensorRtOptimization/rsc/TEST_SET_S2S_X.npy')[:2000]
-Y = np.load('/home/kingfisher/TensorRtOptimization/rsc/TEST_SET_S2S_Y.npy')[:2000]
+X = np.load('/home/kingfisher/TensorRtOptimization/rsc/TEST_SET_S2S_X.npy')
+Y = np.load('/home/kingfisher/TensorRtOptimization/rsc/TEST_SET_S2S_Y.npy')
 
 # You can set the logger severity higher to suppress messages (or lower to display more messages).
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)

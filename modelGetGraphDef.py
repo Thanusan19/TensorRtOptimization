@@ -1,6 +1,4 @@
-import tensorrt as trt
 import tensorflow as tf
-import numpy as np
 import datetime
 
 #-----------------------------------------------------
@@ -8,11 +6,6 @@ from tensorflow.summary import FileWriter
 from tensorflow.python.compiler.tensorrt import trt_convert as trt
 
 import uff
-#import pycuda.driver as cuda
-#from tensorrt.parsers import uffparser
-
-#import pycuda.driver as cuda
-#import pycuda.autoinit
 
 from random import randint # generate a random test case
 from PIL import Image
@@ -26,20 +19,18 @@ import pycuda.driver as cuda
 import pycuda.autoinit
 import tensorrt as trt
 import sys
-#sys.path.insert(1, os.path.join(sys.path[0], ".."))
-import common
-#from common import * 
+import common 
 #----------------------------------------------------
-MAX_BATCH_SIZE=20000
-batch_size=2000
+MAX_BATCH_SIZE=100000
+batch_size=1000
 inference_Loop=10000
 
 
 
 ROOT = '/home/localadmin/Documents/MLP/model_ckpt'
 PATH = ROOT+'/Best_1S'
-X = np.load('/home/localadmin/Documents/TEST_SET_S2S_X.npy')[:2000]
-Y = np.load('/home/localadmin/Documents/TEST_SET_S2S_Y.npy')[:2000]
+X = np.load('/home/localadmin/Documents/TEST_SET_S2S_X.npy')
+Y = np.load('/home/localadmin/Documents/TEST_SET_S2S_Y.npy')
 
 # You can set the logger severity higher to suppress messages (or lower to display more messages).
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
@@ -66,7 +57,7 @@ def build_engine(model_file):
         # Build and return an engine.
         return builder.build_cuda_engine(network)
 
-        
+
 def do_inference(context, bindings, inputs, outputs, stream, batch_size=batch_size):
     # Transfer input data to the GPU.
     [cuda.memcpy_htod_async(inp.device, inp.host, stream) for inp in inputs]
@@ -115,7 +106,6 @@ def main():
 	RMSE = np.sqrt(np.mean((PRED[:,:] - Y[:,-1,:])**2))
 	STD = np.std((PRED[:,:] - Y[:,-1,:])**2)
 
-	#print(Y[:,-1,:])
 
 	FileWriter("__tb", sess.graph)
 	#--------------------------------------------------#
@@ -154,8 +144,7 @@ def main():
 	#----------------------------------#
 	#Build the engine and run inference#
 	#---------------------------------#
-	model_file='model.uff'
-	maxBatchSize=2000
+	model_file=ModelData.MODEL_FILE
 	builder=build_engine(model_file)
 	
 	with builder as engine:
@@ -181,9 +170,6 @@ def main():
 	print("Elapsed time without TensorRT: ",elapsed_time)
         #print("Max batch time",engine.max_batch_size)
 
-#MLP --> 10 000 inferences
-#    -without TensorRT : 118 s 
-#    -with TensorRT : 0.35 s
 
 if __name__ == '__main__':
     main()
