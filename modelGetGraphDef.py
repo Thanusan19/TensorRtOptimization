@@ -5,6 +5,7 @@ import datetime
 from tensorflow.summary import FileWriter
 from tensorflow.python.compiler.tensorrt import trt_convert as trt
 
+from tensorflow.saved_model import simple_save
 import uff
 
 from random import randint # generate a random test case
@@ -19,11 +20,12 @@ import pycuda.driver as cuda
 import pycuda.autoinit
 import tensorrt as trt
 import sys
-import common 
+import common
+import tf2onnx 
 #----------------------------------------------------
 MAX_BATCH_SIZE=100000
-batch_size=100000
-inference_Loop=1000
+batch_size=2000
+inference_Loop=1
 
 
 
@@ -37,7 +39,7 @@ TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 elapsed_time_TRT=0
 
 class ModelData(object):
-    MODEL_FILE = "model.uff"
+    MODEL_FILE = "model.uff" #"model.uff"
     INPUT_NAME ="inputs"
     INPUT_SHAPE = X.shape[1:]
     OUTPUT_NAME = "output/BiasAdd"
@@ -84,7 +86,7 @@ def main():
 	saver = tf.train.import_meta_graph(PATH+'.meta')
 	saver.restore(sess, PATH)
 
-	PRED = sess.run('output/BiasAdd:0',feed_dict={'inputs:0':X})#,'hidden_state:0':np.zeros((3,X.shape[0],64))})
+	#PRED = sess.run('output/BiasAdd:0',feed_dict={'inputs:0':X})#,'hidden_state:0':np.zeros((3,X.shape[0],64))})
 
 	# RNN, GRU OK
 	HS = np.zeros((3,X.shape[0],64))
@@ -96,7 +98,7 @@ def main():
 
 	start = datetime.datetime.now()
 	for i in range(inference_Loop):
-	    PRED = sess.run('output/BiasAdd:0',feed_dict={'inputs:0':X})#,'hidden_state:0':HS})
+	    PRED = sess.run('output/BiasAdd:0',feed_dict={'inputs:0':X}) #,'hidden_state:0':HS})
 	end = datetime.datetime.now()
 
 	elapsed_time = (end-start).total_seconds()
@@ -108,11 +110,19 @@ def main():
 
 
 	FileWriter("__tb", sess.graph)
+
+	onnx_graph = tf2onnx.tfonnx.process_tf_graph(sess.graph, input_names=["inputs:0"], output_names=["output/BiasAdd:0"])
+	model_proto = onnx_graph.make_model("test")
+	#tf.saved_model.save(sess, "/home/localadmin/Documents/MLP/")
+	#saver = tf.train.Saver()
+	#saver.save(sess, '/home/localadmin/Documents/MLP/modelmlp') 
+	#save_path="./home/localadmin/Documents/MLP/model_ckpt"
+	#simple_save(sess, save_path, {"inputs:0"}, {"output/BiasAdd:0"})
 	#--------------------------------------------------#
 	#Get output nodes  Names
 	#--------------------------------------------------#
 	graph = sess.graph
-	#print([node.name for node in graph.as_graph_def().node])
+	print([node.name for node in graph.as_graph_def().node])
 	output_node_names=[node.name for node in graph.as_graph_def().node]
 
 	#----------------------------------------------------------------#
@@ -138,7 +148,7 @@ def main():
 	#----------------------------------#
 	#Conversion TF graph def as UFF #
 	#---------------------------------#
-	uff_model = uff.from_tensorflow_frozen_model(ROOT+'/frozen_model.pb',['output/BiasAdd'],output_filename = 'model.uff')
+	uff_model = uff.from_tensorflow_frozen_model(ROOT+'/frozen_model.pb',['output/BiasAdd'],output_filename = ModelData.MODEL_FILE)
 
 
 	#----------------------------------#
